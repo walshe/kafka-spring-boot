@@ -1,5 +1,6 @@
 package dev.lydech.dispatch.service;
 
+import dev.lydech.dispatch.client.StockServiceClient;
 import dev.lydech.dispatch.message.OrderCreated;
 import dev.lydech.dispatch.message.OrderDispatched;
 import dev.lydech.dispatch.util.TestEventData;
@@ -23,27 +24,35 @@ class DispatchServiceTest {
 
     private KafkaTemplate kafkaProducerMock;
 
+    private StockServiceClient stockServiceClientMock;
+
     @BeforeEach
     void setUp() {
         kafkaProducerMock = mock(KafkaTemplate.class);
-        service = new DispatchService(kafkaProducerMock);
+        stockServiceClientMock = mock(StockServiceClient.class);
+        service = new DispatchService(kafkaProducerMock, stockServiceClientMock);
+
     }
 
     @Test
     void process_Success() throws Exception {
         String key = UUID.randomUUID().toString();
         when(kafkaProducerMock.send(anyString(), anyString(),any(OrderDispatched.class))).thenReturn(mock(CompletableFuture.class));
+        when(stockServiceClientMock.checkAvailability(anyString())).thenReturn("true");
+
         OrderCreated event = TestEventData.buildOrderCreatedEvent(UUID.randomUUID(), UUID.randomUUID().toString());
         service.process(key, event);
         verify(kafkaProducerMock, times(1)).send(eq(
                 "order.dispatched"
         ), eq(key),any(OrderDispatched.class));
+        verify(stockServiceClientMock, times(1)).checkAvailability(eq(event.getItem()));
     }
 
     @Test
     void process_ProducerThrowsException() throws Exception {
         String key = UUID.randomUUID().toString();
         OrderCreated event = TestEventData.buildOrderCreatedEvent(UUID.randomUUID(), UUID.randomUUID().toString());
+        when(stockServiceClientMock.checkAvailability(anyString())).thenReturn("true");
         doThrow(new RuntimeException("Kafka error")).when(kafkaProducerMock).send(eq(
                 "order.dispatched"
         ), eq(key), any(OrderDispatched.class));
@@ -59,5 +68,7 @@ class DispatchServiceTest {
 
         assertThat(exception.getMessage(), equalTo("Kafka error"
         ));
+
+        verify(stockServiceClientMock, times(1)).checkAvailability(eq(event.getItem()));
     }
 }
