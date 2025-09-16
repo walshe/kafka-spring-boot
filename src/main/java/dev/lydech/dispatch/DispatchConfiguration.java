@@ -27,6 +27,8 @@ import java.util.Map;
 @Configuration
 public class DispatchConfiguration {
 
+    private static String TRUSTED_PACKAGES = "dev.lydech.dispatch.message"; //restrict deserialization to only our message classes
+
     /**
      * ConcurrentKafkaListenerContainerFactory is recommended over KafkaListenerContainerFactory because it supports concurrent message listeners
      *
@@ -55,7 +57,7 @@ public class DispatchConfiguration {
                         ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
                         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class,
                         ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class,
-                        JsonDeserializer.VALUE_DEFAULT_TYPE, OrderCreated.class.getCanonicalName(),
+                        JsonDeserializer.TRUSTED_PACKAGES, TRUSTED_PACKAGES,
                         ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class)
         );
 
