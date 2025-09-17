@@ -37,14 +37,14 @@ class DispatchServiceTest {
     @Test
     void process_Success() throws Exception {
         String key = UUID.randomUUID().toString();
-        when(kafkaProducerMock.send(anyString(), anyString(),any(OrderDispatched.class))).thenReturn(mock(CompletableFuture.class));
+        when(kafkaProducerMock.send(anyString(), anyString(), any(OrderDispatched.class))).thenReturn(mock(CompletableFuture.class));
         when(stockServiceClientMock.checkAvailability(anyString())).thenReturn("true");
 
         OrderCreated event = TestEventData.buildOrderCreatedEvent(UUID.randomUUID(), UUID.randomUUID().toString());
         service.process(key, event);
         verify(kafkaProducerMock, times(1)).send(eq(
                 "order.dispatched"
-        ), eq(key),any(OrderDispatched.class));
+        ), eq(key), any(OrderDispatched.class));
         verify(stockServiceClientMock, times(1)).checkAvailability(eq(event.getItem()));
     }
 
@@ -64,7 +64,7 @@ class DispatchServiceTest {
 
         verify(kafkaProducerMock, times(1)).send(eq(
                 "order.dispatched"
-        ), eq(key),any(OrderDispatched.class));
+        ), eq(key), any(OrderDispatched.class));
 
         assertThat(exception.getMessage(), equalTo("Kafka error"
         ));

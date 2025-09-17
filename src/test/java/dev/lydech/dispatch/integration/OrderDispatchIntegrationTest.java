@@ -40,14 +40,15 @@ import static org.hamcrest.Matchers.notNullValue;
 
 @Slf4j
 @SpringBootTest(classes = {DispatchConfiguration.class})
-@AutoConfigureWireMock(port=0) //will use random unused port at runtime
+@AutoConfigureWireMock(port = 0) //will use random unused port at runtime
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
-@EmbeddedKafka(controlledShutdown = true)
+@EmbeddedKafka(controlledShutdown = true, topics = {"order.created", "order.created.DLT", "dispatch.tracking", "order.dispatched"})
 public class OrderDispatchIntegrationTest {
 
     private final static String ORDER_CREATED_TOPIC = "order.created";
     private final static String ORDER_DISPATCHED_TOPIC = "order.dispatched";
+    private final static String ORDER_CREATED_DLT_TOPIC = "order.created.DLT";
 
     @Autowired
     private KafkaTemplate kafkaTemplate;
@@ -73,9 +74,12 @@ public class OrderDispatchIntegrationTest {
     /**
      * Use this receiver to consume messages from the outbound topics.
      */
-    @KafkaListener(groupId = "KafkaIntegrationTest", topics = { ORDER_DISPATCHED_TOPIC })
+    @KafkaListener(groupId = "KafkaIntegrationTest", topics = {ORDER_DISPATCHED_TOPIC, ORDER_CREATED_DLT_TOPIC},
+            containerFactory = "kafkaListenerContainerFactory", properties = {"auto.offset.reset=earliest"})
     public static class KafkaTestListener {
         AtomicInteger orderDispatchedCounter = new AtomicInteger(0);
+        AtomicInteger orderCreatedDltCounter = new AtomicInteger(0);
+
 
         @KafkaHandler
         void receiveOrderDispatched(@Header(KafkaHeaders.RECEIVED_KEY) String key, @Payload OrderDispatched payload) {
@@ -85,12 +89,21 @@ public class OrderDispatchIntegrationTest {
             orderDispatchedCounter.incrementAndGet();
         }
 
+        @KafkaHandler
+        void receiveOrderCreatedDlt(@Header(KafkaHeaders.RECEIVED_KEY) String key, @Payload OrderCreated payload) {
+            log.debug("Received OrderCreated DLT key: " + key + " - payload: " + payload);
+            assertThat(key, notNullValue());
+            assertThat(payload, notNullValue());
+            orderCreatedDltCounter.incrementAndGet();
+        }
+
 
     }
 
     @BeforeEach
     public void setUp() {
         testListener.orderDispatchedCounter.set(0);
+        testListener.orderCreatedDltCounter.set(0);
 
         WiremockUtils.reset();
 
@@ -116,6 +129,8 @@ public class OrderDispatchIntegrationTest {
         await().atMost(1, TimeUnit.SECONDS).pollDelay(100, TimeUnit.MILLISECONDS)
                 .until(testListener.orderDispatchedCounter::get, equalTo(1));
 
+        assertThat(testListener.orderCreatedDltCounter.get(), equalTo(0));
+
     }
 
     /**
@@ -129,7 +144,8 @@ public class OrderDispatchIntegrationTest {
         OrderCreated orderCreated = TestEventData.buildOrderCreatedEvent(randomUUID(), "my-item");
         sendMessage(ORDER_CREATED_TOPIC, randomUUID().toString(), orderCreated);
 
-        TimeUnit.SECONDS.sleep(3);
+        await().atMost(3, TimeUnit.SECONDS).pollDelay(100, TimeUnit.MILLISECONDS)
+                .until(testListener.orderCreatedDltCounter::get, equalTo(1));
         assertThat(testListener.orderDispatchedCounter.get(), equalTo(0));
 
     }
@@ -149,6 +165,20 @@ public class OrderDispatchIntegrationTest {
 
         await().atMost(1, TimeUnit.SECONDS).pollDelay(100, TimeUnit.MILLISECONDS)
                 .until(testListener.orderDispatchedCounter::get, equalTo(1));
+        assertThat(testListener.orderCreatedDltCounter.get(), equalTo(0));
+
+    }
+
+    @Test
+    public void testOrderDispatchFlow_RetryUntilFailure() throws Exception {
+        stubWiremock("/api/stock?item=my-item", 503, "Service unavailable");
+
+        OrderCreated orderCreated = TestEventData.buildOrderCreatedEvent(randomUUID(), "my-item");
+        sendMessage(ORDER_CREATED_TOPIC, randomUUID().toString(), orderCreated);
+
+        await().atMost(10, TimeUnit.SECONDS).pollDelay(100, TimeUnit.MILLISECONDS)
+                .until(testListener.orderCreatedDltCounter::get, equalTo(1));
+        assertThat(testListener.orderDispatchedCounter.get(), equalTo(0));
 
     }
 

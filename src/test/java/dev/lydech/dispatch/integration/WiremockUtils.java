@@ -1,8 +1,6 @@
 package dev.lydech.dispatch.integration;
 
 
-
-
 import com.github.tomakehurst.wiremock.client.WireMock;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;

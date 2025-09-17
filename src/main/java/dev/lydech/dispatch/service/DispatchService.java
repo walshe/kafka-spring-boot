@@ -25,10 +25,10 @@ public class DispatchService {
 
     private final StockServiceClient stockServiceClient;
 
-    public void process(String key , OrderCreated orderCreated) throws Exception{
+    public void process(String key, OrderCreated orderCreated) throws Exception {
 
         String availability = stockServiceClient.checkAvailability(orderCreated.getItem());
-        if(Boolean.valueOf(availability)) {
+        if (Boolean.valueOf(availability)) {
 
 
             OrderDispatched orderDispatched = OrderDispatched.builder()
@@ -40,7 +40,7 @@ public class DispatchService {
             kafkaProducer.send(ORDER_DISPATCHED_TOPIC, key, orderDispatched).get(); //async which is not good
 
             log.info("Published OrderDispatched event: {} to topic: {}", orderDispatched, ORDER_DISPATCHED_TOPIC);
-        }else{
+        } else {
             log.warn("Item: {} is not available in stock for orderId: {}", orderCreated.getItem(), orderCreated.getOrderId());
         }
     }

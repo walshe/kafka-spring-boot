@@ -37,7 +37,7 @@ class OrderCreatedHandlerTest {
         verify(dispatchServiceMock, times(1)).process(key, event);
     }
 
-//    @Test
+    //    @Test
 //    void listen_ServiceThrowsException() throws Exception {
 //        String key = randomUUID().toString();
 //        OrderCreated event = TestEventData.buildOrderCreatedEvent(randomUUID(), randomUUID().toString());
